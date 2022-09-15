@@ -23,12 +23,14 @@ type TemporaryCredential struct {
 func GetOrCreateCredentialsFile() (*os.File, error) {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		log.Fatal("Unable to locate the home directory")
+		log.Println("unable to locate the home directory")
+		return nil, err
 	}
 
 	awsCredentialsPath := filepath.Join(homeDir, ".aws", "credentials")
 	if err = os.MkdirAll(filepath.Dir(awsCredentialsPath), 0755); err != nil {
-		log.Fatal("Unable to create credentials file")
+		log.Println("unable to create credentials file")
+		return nil, err
 	}
 
 	return os.OpenFile(awsCredentialsPath, os.O_RDONLY|os.O_CREATE, 0600)

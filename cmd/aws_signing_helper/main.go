@@ -14,7 +14,6 @@ import (
 	"net/http"
 	"os"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
 
@@ -161,13 +160,23 @@ func main() {
 	if endpointDetected {
 		endpoint = tmpEndpoint
 	}
-	credentialsOptions := helper.CredentialsOpts{PrivateKeyId: privateKeyId,
-		CertificateId: certificateId, CertificateBundleId: certificateBundleId,
-		RoleArn: roleArnStr, ProfileArnStr: profileArnStr, TrustAnchorArnStr: trustAnchorArnStr,
-		SessionDuration: sessionDuration, Region: region, Endpoint: endpoint,
-		NoVerifySSL: noVerifySSL, WithProxy: withProxy, Debug: debug, Version: Version}
+	credentialsOptions := helper.CredentialsOpts{
+		PrivateKeyId:        privateKeyId,
+		CertificateId:       certificateId,
+		CertificateBundleId: certificateBundleId,
+		RoleArn:             roleArnStr,
+		ProfileArnStr:       profileArnStr,
+		TrustAnchorArnStr:   trustAnchorArnStr,
+		SessionDuration:     sessionDuration,
+		Region:              region,
+		Endpoint:            endpoint,
+		NoVerifySSL:         noVerifySSL,
+		WithProxy:           withProxy,
+		Debug:               debug,
+		Version:             Version,
+	}
 
-	//applicable for `update` operation and `serve` operation
+	// applicable for `update` operation and `serve` operation
 	var refreshableCred = helper.TemporaryCredential{}
 
 	switch command {
@@ -232,7 +241,7 @@ func main() {
 	case "version":
 		fmt.Println(Version)
 	case "update":
-		if privateKeyId == "" || certificateId == "" || 
+		if privateKeyId == "" || certificateId == "" ||
 			profileArnStr == "" || trustAnchorArnStr == "" || roleArnStr == "" {
 			msg := `Usage: aws_signing_helper update
 			--private-key <value> 
@@ -252,72 +261,63 @@ func main() {
 			syscall.Exit(1)
 		}
 		var nextRefreshTime time.Time
-		var m sync.Mutex
 		for {
-			if helper.ValidCred(refreshableCred) {
-				nextRefreshTime = refreshableCred.Expiration.Add(-helper.UpdateRefreshTime)
-				fmt.Println("Credentials will be refreshed at ", nextRefreshTime.String())
-				time.Sleep(nextRefreshTime.Sub(time.Now()))
-			}
-
 			credentialProcessOutput, err := helper.GenerateCredentials(&credentialsOptions)
 			if err != nil {
 				log.Fatal(err)
 			}
 
-			//Assign Credential Values
+			// Assign Credential Values
 			refreshableCred.AccessKeyId = credentialProcessOutput.AccessKeyId
 			refreshableCred.SecretAccessKey = credentialProcessOutput.SecretAccessKey
 			refreshableCred.SessionToken = credentialProcessOutput.SessionToken
 			refreshableCred.Expiration, _ = time.Parse(time.RFC3339, credentialProcessOutput.Expiration)
 			if (refreshableCred == helper.TemporaryCredential{}) {
-				log.Fatal("No credentials created")
+				log.Println("no credentials created")
+				syscall.Exit(1)
 			}
 			// Get/Create the AWS Credentials file path
 			awsFile, err := helper.GetOrCreateCredentialsFile()
 			if err != nil {
-				log.Fatal(err)
+				log.Println("unable to get or create AWS credentials file")
+				syscall.Exit(1)
 			}
-			defer awsFile.Close()
 
 			// Read in all profiles in the credentials file
 			var lines []string
-			m.Lock()
 			scanner := bufio.NewScanner(awsFile)
 			for scanner.Scan() {
 				lines = append(lines, scanner.Text())
 			}
-			m.Unlock()
 
 			tmpCredFile, err := ioutil.TempFile("", "aws")
 			if err != nil {
 				log.Fatal(err)
 			}
-			defer tmpCredFile.Close()
-			defer os.Remove(tmpCredFile.Name())
 
-			// write to temporary file
+			// Write to temporary file
 			helper.WriteTo(profile, tmpCredFile, lines, &refreshableCred)
 			tmpCredFile.Sync()
 
+			replacementErr := helper.Replace(awsFile, tmpCredFile)
+			if replacementErr != nil {
+				os.Remove(tmpCredFile.Name())
+				log.Println("failed to update credentials")
+				syscall.Exit(1)
+			} else {
+				log.Println("Credentials have been successfully updated")
+			}
+
 			awsFile.Close()
 			tmpCredFile.Close()
-
-			m.Lock()
-			replacementErr := helper.Replace(awsFile, tmpCredFile)
-			m.Unlock()
-			if replacementErr != nil {
-				log.Fatal("Fail to update credentials\n")
-			} else {
-				fmt.Print("Credentials are successfully updated\n")
-			}
+			os.Remove(tmpCredFile.Name())
 
 			if once {
 				break
 			}
 			nextRefreshTime = refreshableCred.Expiration.Add(-helper.UpdateRefreshTime)
-			fmt.Println("Credentials will be refreshed at ", nextRefreshTime.String())
-			time.Sleep(nextRefreshTime.Sub(time.Now()))
+			log.Println("Credentials will be refreshed at", nextRefreshTime.String())
+			time.Sleep(time.Until(nextRefreshTime))
 		}
 	case "serve":
 		// First check whether required arguments are present
@@ -344,7 +344,6 @@ func main() {
 		var refreshableCred = helper.RefreshableCred{}
 
 		credentialProcessOutput, _ := helper.GenerateCredentials(&credentialsOptions)
-		// buf, _ :=json.Marshal(credentialProcessOutput)
 		refreshableCred.AccessKeyId = credentialProcessOutput.AccessKeyId
 		refreshableCred.SecretAccessKey = credentialProcessOutput.SecretAccessKey
 		refreshableCred.Token = credentialProcessOutput.SessionToken
@@ -352,18 +351,18 @@ func main() {
 		endpoint := &helper.Endpoint{PortNum: port, TmpCred: refreshableCred}
 		endpoint.Server = &http.Server{}
 		http.HandleFunc("/", helper.AllIssuesHandlers(&endpoint.TmpCred, &credentialsOptions))
-		//start the credentials endpoint
+		// start the credentials endpoint
 		listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", helper.Address, endpoint.PortNum))
 		if err != nil {
-			log.Fatal("Fail to create listener\n")
+			log.Println("failed to create listener")
 			syscall.Exit(1)
 		}
 		endpoint.PortNum = listener.Addr().(*net.TCPAddr).Port
 		log.Println("Local server started on port:", endpoint.PortNum)
 		log.Println("Make it available to the sdk by running: ")
-		log.Printf("export AWS_CONTAINER_CREDENTIALS_FULL_URI=http://127.0.0.1:%d", endpoint.PortNum)
+		log.Printf("export AWS_CONTAINER_CREDENTIALS_FULL_URI=http://127.0.0.1:%d\n", endpoint.PortNum)
 		if err := endpoint.Server.Serve(listener); err != nil {
-			log.Fatal("Httpserver: ListenAndServe() error\n")
+			log.Println("Httpserver: ListenAndServe() error")
 			syscall.Exit(1)
 		}
 	case "":
