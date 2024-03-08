@@ -16,22 +16,23 @@ import (
 )
 
 type CredentialsOpts struct {
-	PrivateKeyId        string
-	CertificateId       string
-	CertificateBundleId string
-	CertIdentifier      CertIdentifier
-	RoleArn             string
-	ProfileArnStr       string
-	TrustAnchorArnStr   string
-	SessionDuration     int
-	Region              string
-	Endpoint            string
-	NoVerifySSL         bool
-	WithProxy           bool
-	Debug               bool
-	Version             string
-	LibPkcs11           string
-	ReusePin            bool
+	PrivateKeyId          string
+	CertificateId         string
+	CertificateBundleId   string
+	CertIdentifier        CertIdentifier
+	RoleArn               string
+	ProfileArnStr         string
+	TrustAnchorArnStr     string
+	SessionDuration       int
+	Region                string
+	Endpoint              string
+	NoVerifySSL           bool
+	WithProxy             bool
+	Debug                 bool
+	Version               string
+	LibPkcs11             string
+	ReusePin              bool
+	WorkloadApiSocketPath string
 }
 
 // Function to create session and generate credentials

@@ -23,11 +23,12 @@ var (
 	debug             bool
 	reusePin          bool
 
-	certificateId       string
-	privateKeyId        string
-	certificateBundleId string
-	certSelector        string
-	systemStoreName     string
+	certificateId         string
+	privateKeyId          string
+	workloadApiSocketPath string
+	certificateBundleId   string
+	certSelector          string
+	systemStoreName       string
 
 	libPkcs11 string
 
@@ -63,6 +64,7 @@ func initCredentialsSubCommand(subCmd *cobra.Command) {
 	subCmd.PersistentFlags().BoolVar(&debug, "debug", false, "To print debug output")
 	subCmd.PersistentFlags().StringVar(&certificateId, "certificate", "", "Path to certificate file")
 	subCmd.PersistentFlags().StringVar(&privateKeyId, "private-key", "", "Path to private key file")
+	subCmd.PersistentFlags().StringVar(&workloadApiSocketPath, "workload-api-socket-path", "", "SPIFFE Workload API socket path (a UNIX domain socket path)")
 	subCmd.PersistentFlags().StringVar(&certificateBundleId, "intermediates", "", "Path to intermediate certificate bundle file")
 	subCmd.PersistentFlags().StringVar(&certSelector, "cert-selector", "", "JSON structure to identify a certificate from a certificate store. "+
 		"Can be passed in either as string or a file name (prefixed by \"file://\")")
@@ -226,22 +228,23 @@ func PopulateCredentialsOptions() error {
 	}
 
 	credentialsOptions = helper.CredentialsOpts{
-		PrivateKeyId:        privateKeyId,
-		CertificateId:       certificateId,
-		CertificateBundleId: certificateBundleId,
-		CertIdentifier:      certIdentifier,
-		RoleArn:             roleArnStr,
-		ProfileArnStr:       profileArnStr,
-		TrustAnchorArnStr:   trustAnchorArnStr,
-		SessionDuration:     sessionDuration,
-		Region:              region,
-		Endpoint:            endpoint,
-		NoVerifySSL:         noVerifySSL,
-		WithProxy:           withProxy,
-		Debug:               debug,
-		Version:             Version,
-		LibPkcs11:           libPkcs11,
-		ReusePin:            reusePin,
+		PrivateKeyId:          privateKeyId,
+		CertificateId:         certificateId,
+		CertificateBundleId:   certificateBundleId,
+		CertIdentifier:        certIdentifier,
+		RoleArn:               roleArnStr,
+		ProfileArnStr:         profileArnStr,
+		TrustAnchorArnStr:     trustAnchorArnStr,
+		SessionDuration:       sessionDuration,
+		Region:                region,
+		Endpoint:              endpoint,
+		NoVerifySSL:           noVerifySSL,
+		WithProxy:             withProxy,
+		Debug:                 debug,
+		Version:               Version,
+		LibPkcs11:             libPkcs11,
+		ReusePin:              reusePin,
+		WorkloadApiSocketPath: workloadApiSocketPath,
 	}
 
 	return nil

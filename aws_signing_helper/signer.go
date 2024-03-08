@@ -175,21 +175,12 @@ func GetSigner(opts *CredentialsOpts) (signer Signer, signatureAlgorithm string,
 		privateKey       crypto.PrivateKey
 	)
 
-	privateKeyId := opts.PrivateKeyId
-	if privateKeyId == "" {
-		if opts.CertificateId == "" {
-			if Debug {
-				log.Println("attempting to use CertStoreSigner")
-			}
-			return GetCertStoreSigner(opts.CertIdentifier)
-		}
-		privateKeyId = opts.CertificateId
-	}
-
-	if opts.CertificateId == "SPIRE" {
-		// Fetch the certificate and private key from the SPIFFE Workload API exposed by the SPIRE agent
+	// Fetch the end-entity certificate and private key from the SPIFFE Workload API
+	// if it was provided when calling the process
+	if opts.WorkloadApiSocketPath != "" {
 		backgroundContext := context.Background()
-		client, err := workloadapi.New(backgroundContext, workloadapi.WithAddr("unix:///tmp/agent.sock"))
+		workloadApiSocketPath := fmt.Sprintf("unix://%s", opts.WorkloadApiSocketPath)
+		client, err := workloadapi.New(backgroundContext, workloadapi.WithAddr(workloadApiSocketPath))
 		if err != nil {
 			return nil, "", err
 		}
@@ -204,6 +195,17 @@ func GetSigner(opts *CredentialsOpts) (signer Signer, signatureAlgorithm string,
 		privateKey := x509Svid.PrivateKey
 
 		return GetFileSystemSigner(privateKey, certificateChain[0], certificateChain)
+	}
+
+	privateKeyId := opts.PrivateKeyId
+	if privateKeyId == "" {
+		if opts.CertificateId == "" {
+			if Debug {
+				log.Println("attempting to use CertStoreSigner")
+			}
+			return GetCertStoreSigner(opts.CertIdentifier)
+		}
+		privateKeyId = opts.CertificateId
 	}
 
 	if opts.CertificateId != "" && !strings.HasPrefix(opts.CertificateId, "pkcs11:") {

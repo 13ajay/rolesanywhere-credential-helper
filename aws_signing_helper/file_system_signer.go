@@ -60,9 +60,25 @@ func (fileSystemSigner FileSystemSigner) Sign(rand io.Reader, digest []byte, opt
 		}
 	}
 
+	ecdsaPrivateKeyPtr, ok := fileSystemSigner.PrivateKey.(*ecdsa.PrivateKey)
+	if ok {
+		sig, err := ecdsa.SignASN1(rand, ecdsaPrivateKeyPtr, hash[:])
+		if err == nil {
+			return sig, nil
+		}
+	}
+
 	rsaPrivateKey, ok := fileSystemSigner.PrivateKey.(rsa.PrivateKey)
 	if ok {
 		sig, err := rsa.SignPKCS1v15(rand, &rsaPrivateKey, opts.HashFunc(), hash[:])
+		if err == nil {
+			return sig, nil
+		}
+	}
+
+	rsaPrivateKeyPtr, ok := fileSystemSigner.PrivateKey.(*rsa.PrivateKey)
+	if ok {
+		sig, err := rsa.SignPKCS1v15(rand, rsaPrivateKeyPtr, opts.HashFunc(), hash[:])
 		if err == nil {
 			return sig, nil
 		}
@@ -87,7 +103,15 @@ func GetFileSystemSigner(privateKey crypto.PrivateKey, certificate *x509.Certifi
 	if isRsaKey {
 		signingAlgorithm = aws4_x509_rsa_sha256
 	}
+	_, isRsaKey = privateKey.(*rsa.PrivateKey)
+	if isRsaKey {
+		signingAlgorithm = aws4_x509_rsa_sha256
+	}
 	_, isEcKey := privateKey.(ecdsa.PrivateKey)
+	if isEcKey {
+		signingAlgorithm = aws4_x509_ecdsa_sha256
+	}
+	_, isEcKey = privateKey.(*ecdsa.PrivateKey)
 	if isEcKey {
 		signingAlgorithm = aws4_x509_ecdsa_sha256
 	}
