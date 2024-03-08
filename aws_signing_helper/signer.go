@@ -2,6 +2,7 @@ package aws_signing_helper
 
 import (
 	"bytes"
+	"context"
 	"crypto"
 	"crypto/ecdsa"
 	"crypto/rand"
@@ -25,6 +26,7 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/request"
+	"github.com/spiffe/go-spiffe/v2/workloadapi"
 	"golang.org/x/crypto/pkcs12"
 )
 
@@ -182,6 +184,26 @@ func GetSigner(opts *CredentialsOpts) (signer Signer, signatureAlgorithm string,
 			return GetCertStoreSigner(opts.CertIdentifier)
 		}
 		privateKeyId = opts.CertificateId
+	}
+
+	if opts.CertificateId == "SPIRE" {
+		// Fetch the certificate and private key from the SPIFFE Workload API exposed by the SPIRE agent
+		backgroundContext := context.Background()
+		client, err := workloadapi.New(backgroundContext, workloadapi.WithAddr("unix:///tmp/agent.sock"))
+		if err != nil {
+			return nil, "", err
+		}
+		defer client.Close()
+
+		x509Svid, err := client.FetchX509SVID(backgroundContext)
+		if err != nil {
+			return nil, "", err
+		}
+
+		certificateChain := x509Svid.Certificates
+		privateKey := x509Svid.PrivateKey
+
+		return GetFileSystemSigner(privateKey, certificateChain[0], certificateChain)
 	}
 
 	if opts.CertificateId != "" && !strings.HasPrefix(opts.CertificateId, "pkcs11:") {
